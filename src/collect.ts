@@ -1,4 +1,4 @@
-import simpleGit from "simple-git";
+import { simpleGit } from "simple-git";
 import { readdir, readFile, access } from "node:fs/promises";
 import { join } from "node:path";
 

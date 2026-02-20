@@ -11,7 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
+    "@anthropic-ai/bedrock-sdk": "^0.26.4",
     "simple-git": "^3.27.0"
   },
   "devDependencies": {
