@@ -1,0 +1,10 @@
+{
+  "name": "my-js-app",
+  "version": "1.0.0",
+  "dependencies": {
+    "fastify": "^4.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
+  }
+}

@@ -1,28 +1,41 @@
-# mood
+# cli-tools
 
-A TypeScript ESM CLI that checks the "vibe" of a software project.
+Personal CLI toolkit. All tools are local-first, terminal-native, and fast.
 
-Instead of a typical mechanical status report, `mood` gathers quick signals about your project and feeds them to Claude (via AWS Bedrock) to generate a casual, 2-3 sentence project weather report.
+## Tools
+
+| Tool | Description | Docs |
+|------|-------------|------|
+| [chk](packages/chk) | Traffic-light project health check | [AGENTS.md](packages/chk/AGENTS.md) |
+| [ctx](packages/ctx) | Capture project context for AI tools | [AGENTS.md](packages/ctx/AGENTS.md) |
+| [vibe](packages/vibe) | AI-powered git activity summary | [README](packages/vibe/README.md) |
+| [mood](packages/mood) | Quick project mood check via Claude | [README](packages/mood/README.md) |
 
 ## Usage
 
 ```bash
-# Ensure AWS credentials are in your environment, e.g. via SSO
-export AWS_REGION=us-east-1
-export AWS_PROFILE=slittycodes
+# Install all tools globally from workspace root
+npm run build
+npm link --workspaces
 
-# Run from any git project directory
-mood
+# Or use each tool directly
+node packages/chk/dist/cli/main.js
+node packages/ctx/dist/cli/main.js
 ```
 
-## How it works
+## Development
 
-1. Evaluates your current Git branch and working tree status.
-2. Checks uncommitted changes and the age/message of your last commit.
-3. Does a fast scan for `TODO/FIXME/HACK` markers across your tracked files.
-4. Identifies the project type (e.g., Node, Python, Rust, Go).
-5. Sends these signals to `us.anthropic.claude-3-5-sonnet-20241022-v2:0` via AWS Bedrock.
-6. Streams the response directly into your terminal.
+```bash
+# Install all dependencies
+npm install
 
-## Philosophy
-`mood` fails fast: if git is slow, or you aren't in a git repository, or your AWS credentials are missing, it immediately exits rather than hanging. It gives you an instant snapshot of the project's feeling.
+# Build all packages
+npm run build
+
+# Test all packages
+npm test
+
+# Work on a single package
+cd packages/chk
+npm test
+```
