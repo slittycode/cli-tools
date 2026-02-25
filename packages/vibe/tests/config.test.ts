@@ -58,6 +58,8 @@ describe('Config Module', () => {
     });
 
     it('should load config with AWS credentials from environment', () => {
+      delete process.env.AWS_REGION;
+      delete process.env.AWS_DEFAULT_REGION;
       process.env.AWS_ACCESS_KEY_ID = 'test-key-id';
       process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
       process.env.VIBE_ROOT = homedir(); // Use home directory which always exists

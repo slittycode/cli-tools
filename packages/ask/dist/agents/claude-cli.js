@@ -1,0 +1,41 @@
+/**
+ * Claude Code CLI agent
+ * Spawns the `claude` binary and streams its stdout.
+ *
+ * Invocation: `claude -p "<prompt>"` (non-interactive mode)
+ * Docs: https://docs.anthropic.com/en/docs/claude-code/cli-reference
+ */
+import { spawn } from 'child_process';
+export class ClaudeCliAgent {
+    info;
+    constructor(info) {
+        this.info = info;
+    }
+    async *ask(prompt, opts) {
+        const fullPrompt = opts?.system ? `${opts.system}\n\n${prompt}` : prompt;
+        const child = spawn('claude', ['-p', fullPrompt], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        // Yield stdout chunks as they arrive
+        for await (const chunk of child.stdout) {
+            yield chunk.toString('utf8');
+        }
+        // Capture and surface stderr only on non-zero exit
+        const stderrChunks = [];
+        for await (const chunk of child.stderr) {
+            stderrChunks.push(chunk);
+        }
+        await new Promise((resolve, reject) => {
+            child.on('close', (code) => {
+                if (code !== 0) {
+                    const msg = Buffer.concat(stderrChunks).toString('utf8').trim();
+                    reject(new Error(`claude exited with code ${code}: ${msg}`));
+                }
+                else {
+                    resolve();
+                }
+            });
+        });
+    }
+}
+//# sourceMappingURL=claude-cli.js.map

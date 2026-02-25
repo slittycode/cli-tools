@@ -1,0 +1,32 @@
+{
+  "name": "ask-cli",
+  "version": "0.1.0",
+  "description": "Universal AI prompt dispatcher — routes to Claude, Bedrock, Gemini, Ollama, and Qwen from a single command",
+  "type": "module",
+  "bin": { "ask": "./dist/cli/main.js" },
+  "main": "./dist/index.js",
+  "exports": { ".": "./dist/index.js" },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "postbuild": "chmod +x dist/cli/main.js",
+    "dev": "tsx src/cli/main.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "engines": { "node": ">=22.0.0" },
+  "keywords": ["cli", "ai", "claude", "gemini", "ollama", "bedrock", "dispatcher"],
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.994.0",
+    "commander": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "tsx": "^4.19.0"
+  }
+}
