@@ -8,19 +8,17 @@
 import { AgentId, AgentInfo } from './types.js';
 import { detectAgents, availableAgents } from './detect.js';
 import { createAgent } from './agents/index.js';
+import { validateAgentFlag } from './validate.js';
+import { AskError, ErrorCode } from './errors.js';
 import type { Agent } from './types.js';
 
 const PREFERENCE_ORDER: AgentId[] = ['claude-cli', 'bedrock', 'openai', 'gemini', 'ollama'];
 
-/**
- * Parse "--agent" value into id + optional model.
- * Examples:
- *   "ollama"           → { id: 'ollama', model: undefined }
- *   "ollama:qwen2.5"   → { id: 'ollama', model: 'qwen2.5' }
+/** @deprecated Use validateAgentFlag from validate.ts directly.
+ * Kept for backwards compatibility with external callers.
  */
 export function parseAgentFlag(flag: string): { id: AgentId; model?: string } {
-  const [id, model] = flag.split(':') as [AgentId, string | undefined];
-  return { id, model };
+  return validateAgentFlag(flag);
 }
 
 /**
@@ -32,15 +30,16 @@ export async function resolveAgent(agentFlag?: string): Promise<Agent> {
   const all = await detectAgents();
 
   if (agentFlag) {
-    const { id, model } = parseAgentFlag(agentFlag);
+    // validateAgentFlag throws AskError on bad format / unknown id
+    const { id, model } = validateAgentFlag(agentFlag);
     const info = all.find((a) => a.id === id);
 
-    if (!info) {
-      const valid = PREFERENCE_ORDER.join(', ');
-      throw new Error(`Unknown agent "${id}". Valid agents: ${valid}`);
-    }
-    if (!info.available) {
-      throw new Error(`Agent "${id}" is not available: ${info.reason}`);
+    // info will always exist here because validateAgentFlag checks VALID_AGENT_IDS
+    if (!info || !info.available) {
+      throw new AskError(
+        ErrorCode.AGENT_UNAVAILABLE,
+        `Agent "${id}" is not available: ${info?.reason ?? 'unknown reason'}`
+      );
     }
     return createAgent(info, model);
   }
@@ -52,9 +51,10 @@ export async function resolveAgent(agentFlag?: string): Promise<Agent> {
     .filter((a): a is AgentInfo => a !== undefined);
 
   if (ordered.length === 0) {
-    throw new Error(
+    throw new AskError(
+      ErrorCode.NO_AGENTS,
       'No AI agents available.\n' +
-        'Install one of:\n' +
+        'Configure one of:\n' +
         '  • Claude Code CLI: https://claude.ai/code\n' +
         '  • AWS Bedrock: set AWS_PROFILE or AWS_ACCESS_KEY_ID\n' +
         '  • OpenAI: set OPENAI_API_KEY (https://platform.openai.com/api-keys)\n' +

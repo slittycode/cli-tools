@@ -6,11 +6,8 @@
  */
 import { AgentId } from './types.js';
 import type { Agent } from './types.js';
-/**
- * Parse "--agent" value into id + optional model.
- * Examples:
- *   "ollama"           → { id: 'ollama', model: undefined }
- *   "ollama:qwen2.5"   → { id: 'ollama', model: 'qwen2.5' }
+/** @deprecated Use validateAgentFlag from validate.ts directly.
+ * Kept for backwards compatibility with external callers.
  */
 export declare function parseAgentFlag(flag: string): {
     id: AgentId;

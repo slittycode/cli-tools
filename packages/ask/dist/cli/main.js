@@ -16,16 +16,44 @@ import { Command } from 'commander';
 import { detectAgents } from '../detect.js';
 import { resolveAgent, resolveAllAgents } from '../router.js';
 import { buildPrompt } from '../context.js';
+import { AskError, ErrorCode } from '../errors.js';
+import { validateAgentFlag, validatePrompt, validateSystemPrompt, validateStdinSize, } from '../validate.js';
+import { STDIN_TIMEOUT_MS } from '../config.js';
 import { printStatus, printAgentHeader, printRouting, printDivider, writeChunk, printStreamEnd, printAgentError, printNoPrompt, } from '../renderer.js';
+/**
+ * Read all of stdin with a hard size cap and a timeout guard.
+ * Returns empty string when stdin is an interactive TTY.
+ */
 async function readStdin() {
-    // Only attempt to read stdin if it's a pipe/file (not a TTY)
     if (process.stdin.isTTY)
         return '';
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const chunks = [];
-        process.stdin.on('data', (chunk) => chunks.push(chunk));
-        process.stdin.on('end', () => resolve(Buffer.concat(chunks).toString('utf8').trim()));
-        process.stdin.on('error', () => resolve(''));
+        let totalBytes = 0;
+        const timer = setTimeout(() => {
+            reject(new AskError(ErrorCode.STDIN_TIMEOUT, `stdin did not complete within ${STDIN_TIMEOUT_MS / 1000}s`));
+        }, STDIN_TIMEOUT_MS);
+        const cleanup = () => clearTimeout(timer);
+        process.stdin.on('data', (chunk) => {
+            totalBytes += chunk.byteLength;
+            try {
+                validateStdinSize(totalBytes);
+            }
+            catch (err) {
+                cleanup();
+                reject(err);
+                return;
+            }
+            chunks.push(chunk);
+        });
+        process.stdin.on('end', () => {
+            cleanup();
+            resolve(Buffer.concat(chunks).toString('utf8').trim());
+        });
+        process.stdin.on('error', (err) => {
+            cleanup();
+            reject(new AskError(ErrorCode.STDIN_TIMEOUT, `stdin error: ${err.message}`));
+        });
     });
 }
 async function main() {
@@ -43,13 +71,35 @@ async function main() {
         .parse(process.argv);
     const opts = program.opts();
     const args = program.args;
+    // ── Validate --agent flag early (fail fast before any I/O) ───────────────
+    if (opts.agent) {
+        try {
+            validateAgentFlag(opts.agent);
+        }
+        catch (err) {
+            process.stderr.write(`Error: ${err instanceof AskError ? err.message : String(err)}\n`);
+            process.exit(1);
+        }
+    }
+    // ── Validate --system length ──────────────────────────────────────────────
+    let system;
+    if (opts.system) {
+        try {
+            system = validateSystemPrompt(opts.system);
+        }
+        catch (err) {
+            process.stderr.write(`Error: ${err instanceof AskError ? err.message : String(err)}\n`);
+            process.exit(1);
+        }
+    }
     const options = {
         prompt: args[0],
         agent: opts.agent,
         all: opts.all,
         status: opts.status,
-        noContext: !opts.context, // commander turns --no-context into opts.context = false
-        system: opts.system,
+        // Commander converts --no-context to opts.context = false
+        noContext: !opts.context,
+        system,
     };
     // ── Status mode ───────────────────────────────────────────────────────────
     if (options.status) {
@@ -57,17 +107,32 @@ async function main() {
         printStatus(agents);
         return;
     }
-    // ── Collect prompt from args + stdin ─────────────────────────────────────
-    const stdinContent = await readStdin();
+    // ── Collect prompt from CLI arg + stdin ───────────────────────────────────
+    let stdinContent;
+    try {
+        stdinContent = await readStdin();
+    }
+    catch (err) {
+        process.stderr.write(`Error: ${err instanceof AskError ? err.message : String(err)}\n`);
+        process.exit(1);
+    }
     let rawPrompt = options.prompt ?? '';
     if (stdinContent) {
-        rawPrompt = rawPrompt
-            ? `${rawPrompt}\n\n${stdinContent}`
-            : stdinContent;
+        rawPrompt = rawPrompt ? `${rawPrompt}\n\n${stdinContent}` : stdinContent;
     }
     if (!rawPrompt.trim()) {
         printNoPrompt();
         process.exit(1);
+    }
+    // ── Validate prompt (warns on large input, rejects empty) ─────────────────
+    try {
+        validatePrompt(rawPrompt);
+    }
+    catch (err) {
+        if (err instanceof AskError && err.code === ErrorCode.EMPTY_PROMPT) {
+            printNoPrompt();
+            process.exit(1);
+        }
     }
     // ── Build final prompt (with optional ctx context) ────────────────────────
     const prompt = buildPrompt(rawPrompt, {
@@ -79,7 +144,14 @@ async function main() {
     };
     // ── --all mode: query every available agent sequentially ──────────────────
     if (options.all) {
-        const agents = await resolveAllAgents();
+        let agents;
+        try {
+            agents = await resolveAllAgents();
+        }
+        catch (err) {
+            process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`);
+            process.exit(1);
+        }
         if (agents.length === 0) {
             process.stderr.write('No agents available. Run `ask --status` for details.\n');
             process.exit(1);
@@ -96,9 +168,9 @@ async function main() {
             catch (err) {
                 printAgentError(agent.info, err);
             }
-            if (i < agents.length - 1) {
+            // One agent failing must not abort the rest in --all mode
+            if (i < agents.length - 1)
                 printDivider();
-            }
         }
         return;
     }
@@ -112,8 +184,7 @@ async function main() {
         printStreamEnd();
     }
     catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        process.stderr.write(`\nError: ${msg}\n`);
+        process.stderr.write(`\nError: ${err instanceof Error ? err.message : String(err)}\n`);
         process.exit(1);
     }
 }

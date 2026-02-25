@@ -4,6 +4,7 @@
  */
 
 import { AgentInfo } from './types.js';
+import { RULE_WIDTH } from './config.js';
 
 // ANSI helpers
 const RESET = '\x1b[0m';
@@ -23,10 +24,8 @@ function cyan(s: string) { return `${CYAN}${s}${RESET}`; }
 function red(s: string) { return `${RED}${s}${RESET}`; }
 function gray(s: string) { return `${GRAY}${s}${RESET}`; }
 
-const WIDTH = 60;
-
 function rule(char = '─') {
-  return char.repeat(WIDTH);
+  return char.repeat(RULE_WIDTH);
 }
 
 /** Print the agent header when streaming begins */

@@ -8,6 +8,7 @@
 
 import { spawn } from 'child_process';
 import { Agent, AgentInfo, AskOptions } from '../types.js';
+import { sanitizeForDisplay } from '../errors.js';
 
 export class ClaudeCliAgent implements Agent {
   info: AgentInfo;
@@ -37,7 +38,7 @@ export class ClaudeCliAgent implements Agent {
     await new Promise<void>((resolve, reject) => {
       child.on('close', (code) => {
         if (code !== 0) {
-          const msg = Buffer.concat(stderrChunks).toString('utf8').trim();
+          const msg = sanitizeForDisplay(Buffer.concat(stderrChunks).toString('utf8').trim());
           reject(new Error(`claude exited with code ${code}: ${msg}`));
         } else {
           resolve();

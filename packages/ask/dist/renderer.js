@@ -2,6 +2,7 @@
  * Terminal output renderer
  * Handles agent headers, streaming output, and the status display.
  */
+import { RULE_WIDTH } from './config.js';
 // ANSI helpers
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -18,9 +19,8 @@ function yellow(s) { return `${YELLOW}${s}${RESET}`; }
 function cyan(s) { return `${CYAN}${s}${RESET}`; }
 function red(s) { return `${RED}${s}${RESET}`; }
 function gray(s) { return `${GRAY}${s}${RESET}`; }
-const WIDTH = 60;
 function rule(char = '─') {
-    return char.repeat(WIDTH);
+    return char.repeat(RULE_WIDTH);
 }
 /** Print the agent header when streaming begins */
 export function printAgentHeader(info) {

@@ -3,6 +3,7 @@
  * Probes the environment for available AI agents without side effects.
  */
 import { execSync, execFileSync } from 'child_process';
+import { OLLAMA_PROBE_TIMEOUT_MS, OLLAMA_API_BASE } from './config.js';
 /** Silently test if a binary exists in PATH */
 function hasBinary(name) {
     try {
@@ -16,7 +17,9 @@ function hasBinary(name) {
 /** Check if Ollama daemon is reachable */
 async function ollamaRunning() {
     try {
-        const res = await fetch('http://localhost:11434/api/tags', { signal: AbortSignal.timeout(1500) });
+        const res = await fetch(`${OLLAMA_API_BASE}/api/tags`, {
+            signal: AbortSignal.timeout(OLLAMA_PROBE_TIMEOUT_MS),
+        });
         return res.ok;
     }
     catch {
@@ -26,7 +29,9 @@ async function ollamaRunning() {
 /** Get list of pulled Ollama models */
 async function ollamaModels() {
     try {
-        const res = await fetch('http://localhost:11434/api/tags', { signal: AbortSignal.timeout(1500) });
+        const res = await fetch(`${OLLAMA_API_BASE}/api/tags`, {
+            signal: AbortSignal.timeout(OLLAMA_PROBE_TIMEOUT_MS),
+        });
         if (!res.ok)
             return [];
         const data = (await res.json());

@@ -8,8 +8,10 @@
  *
  * To get an API key: https://platform.openai.com/api-keys
  */
-const DEFAULT_MODEL = 'gpt-4o';
-const API_BASE = 'https://api.openai.com/v1';
+import { DEFAULT_OPENAI_MODEL, MAX_OUTPUT_TOKENS, OPENAI_API_BASE } from '../config.js';
+import { sanitizeForDisplay } from '../errors.js';
+/** Request timeout for the OpenAI streaming endpoint (60 s) */
+const FETCH_TIMEOUT_MS = 60_000;
 export class OpenAIAgent {
     info;
     apiKey;
@@ -20,7 +22,7 @@ export class OpenAIAgent {
         if (!key)
             throw new Error('OPENAI_API_KEY is not set');
         this.apiKey = key;
-        this.model = process.env.ASK_OPENAI_MODEL ?? DEFAULT_MODEL;
+        this.model = process.env.ASK_OPENAI_MODEL ?? DEFAULT_OPENAI_MODEL;
     }
     async *ask(prompt, opts) {
         const messages = [];
@@ -28,7 +30,7 @@ export class OpenAIAgent {
             messages.push({ role: 'system', content: opts.system });
         }
         messages.push({ role: 'user', content: prompt });
-        const res = await fetch(`${API_BASE}/chat/completions`, {
+        const res = await fetch(`${OPENAI_API_BASE}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -38,11 +40,15 @@ export class OpenAIAgent {
                 model: this.model,
                 messages,
                 stream: true,
+                max_tokens: MAX_OUTPUT_TOKENS,
             }),
+            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         });
         if (!res.ok || !res.body) {
-            const err = await res.text();
-            throw new Error(`OpenAI API error ${res.status}: ${err}`);
+            // Read the error body but sanitize before surfacing — the response
+            // could contain reflected authentication details.
+            const raw = await res.text().catch(() => '(unreadable)');
+            throw new Error(sanitizeForDisplay(`OpenAI error ${res.status}: ${raw}`));
         }
         // Parse SSE stream — each line is "data: <json>" or "data: [DONE]"
         const reader = res.body.getReader();

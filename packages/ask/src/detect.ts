@@ -5,6 +5,7 @@
 
 import { execSync, execFileSync } from 'child_process';
 import { AgentInfo, AgentId } from './types.js';
+import { OLLAMA_PROBE_TIMEOUT_MS, OLLAMA_API_BASE } from './config.js';
 
 /** Silently test if a binary exists in PATH */
 function hasBinary(name: string): boolean {
@@ -19,7 +20,9 @@ function hasBinary(name: string): boolean {
 /** Check if Ollama daemon is reachable */
 async function ollamaRunning(): Promise<boolean> {
   try {
-    const res = await fetch('http://localhost:11434/api/tags', { signal: AbortSignal.timeout(1500) });
+    const res = await fetch(`${OLLAMA_API_BASE}/api/tags`, {
+      signal: AbortSignal.timeout(OLLAMA_PROBE_TIMEOUT_MS),
+    });
     return res.ok;
   } catch {
     return false;
@@ -29,7 +32,9 @@ async function ollamaRunning(): Promise<boolean> {
 /** Get list of pulled Ollama models */
 async function ollamaModels(): Promise<string[]> {
   try {
-    const res = await fetch('http://localhost:11434/api/tags', { signal: AbortSignal.timeout(1500) });
+    const res = await fetch(`${OLLAMA_API_BASE}/api/tags`, {
+      signal: AbortSignal.timeout(OLLAMA_PROBE_TIMEOUT_MS),
+    });
     if (!res.ok) return [];
     const data = (await res.json()) as { models?: Array<{ name: string }> };
     return (data.models ?? []).map((m) => m.name);

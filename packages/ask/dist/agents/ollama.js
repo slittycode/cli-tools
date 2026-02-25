@@ -14,14 +14,17 @@
  *   3. First Qwen model found in pulled models
  *   4. First available model
  */
-const BASE_URL = process.env.OLLAMA_HOST ?? 'http://localhost:11434';
+import { DEFAULT_OLLAMA_MODEL, OLLAMA_API_BASE } from '../config.js';
+import { wrapAgentError } from '../errors.js';
+/** Request timeout for Ollama (2 minutes — local models can be slow to start) */
+const FETCH_TIMEOUT_MS = 120_000;
 export class OllamaAgent {
     info;
     model;
     constructor(info, modelOverride) {
         this.info = info;
-        // Resolution: explicit override > env var > detected model from info > 'qwen2.5'
-        this.model = modelOverride ?? process.env.ASK_OLLAMA_MODEL ?? info.model ?? 'qwen2.5';
+        // Resolution: explicit override > env var > detected model from info > default
+        this.model = modelOverride ?? process.env.ASK_OLLAMA_MODEL ?? info.model ?? DEFAULT_OLLAMA_MODEL;
     }
     async *ask(prompt, opts) {
         const messages = [];
@@ -29,7 +32,7 @@ export class OllamaAgent {
             messages.push({ role: 'system', content: opts.system });
         }
         messages.push({ role: 'user', content: prompt });
-        const res = await fetch(`${BASE_URL}/api/chat`, {
+        const res = await fetch(`${OLLAMA_API_BASE}/api/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -37,10 +40,11 @@ export class OllamaAgent {
                 messages,
                 stream: true,
             }),
+            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         });
         if (!res.ok || !res.body) {
-            const err = await res.text();
-            throw new Error(`Ollama error ${res.status}: ${err}`);
+            const raw = await res.text().catch(() => '(unreadable)');
+            throw wrapAgentError('Ollama', new Error(`HTTP ${res.status}: ${raw}`));
         }
         const reader = res.body.getReader();
         const decoder = new TextDecoder();

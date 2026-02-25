@@ -6,6 +6,7 @@
  * Docs: https://docs.anthropic.com/en/docs/claude-code/cli-reference
  */
 import { spawn } from 'child_process';
+import { sanitizeForDisplay } from '../errors.js';
 export class ClaudeCliAgent {
     info;
     constructor(info) {
@@ -28,7 +29,7 @@ export class ClaudeCliAgent {
         await new Promise((resolve, reject) => {
             child.on('close', (code) => {
                 if (code !== 0) {
-                    const msg = Buffer.concat(stderrChunks).toString('utf8').trim();
+                    const msg = sanitizeForDisplay(Buffer.concat(stderrChunks).toString('utf8').trim());
                     reject(new Error(`claude exited with code ${code}: ${msg}`));
                 }
                 else {

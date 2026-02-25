@@ -10,9 +10,11 @@
 
 import { spawn } from 'child_process';
 import { Agent, AgentInfo, AskOptions } from '../types.js';
+import { DEFAULT_GEMINI_MODEL, GEMINI_API_BASE, MAX_OUTPUT_TOKENS } from '../config.js';
+import { sanitizeForDisplay, wrapAgentError } from '../errors.js';
 
-const DEFAULT_MODEL = 'gemini-2.0-flash';
-const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+/** Request timeout for the Gemini streaming endpoint (60 s) */
+const FETCH_TIMEOUT_MS = 60_000;
 
 export class GeminiAgent implements Agent {
   info: AgentInfo;
@@ -23,7 +25,7 @@ export class GeminiAgent implements Agent {
   constructor(info: AgentInfo) {
     this.info = info;
     this.apiKey = process.env.GOOGLE_API_KEY ?? process.env.GEMINI_API_KEY;
-    this.model = process.env.ASK_GEMINI_MODEL ?? DEFAULT_MODEL;
+    this.model = process.env.ASK_GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL;
     // Fall back to CLI only when no key is set
     this.useCli = !this.apiKey && info.via === 'gemini CLI';
   }
@@ -37,7 +39,7 @@ export class GeminiAgent implements Agent {
   }
 
   private async *askViaApi(prompt: string, opts?: AskOptions): AsyncGenerator<string> {
-    const url = `${API_BASE}/${this.model}:streamGenerateContent?alt=sse&key=${this.apiKey}`;
+    const url = `${GEMINI_API_BASE}/${this.model}:streamGenerateContent?alt=sse&key=${this.apiKey}`;
 
     const systemParts = opts?.system
       ? { system_instruction: { parts: [{ text: opts.system }] } }
@@ -49,13 +51,14 @@ export class GeminiAgent implements Agent {
       body: JSON.stringify({
         ...systemParts,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 4096 },
+        generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS },
       }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
 
     if (!res.ok || !res.body) {
-      const err = await res.text();
-      throw new Error(`Gemini API error ${res.status}: ${err}`);
+      const raw = await res.text().catch(() => '(unreadable)');
+      throw new Error(sanitizeForDisplay(`Gemini error ${res.status}: ${raw}`));
     }
 
     // Parse SSE stream
@@ -105,7 +108,8 @@ export class GeminiAgent implements Agent {
     await new Promise<void>((resolve, reject) => {
       child.on('close', (code) => {
         if (code !== 0) {
-          const msg = Buffer.concat(stderrChunks).toString('utf8').trim();
+          // Sanitize subprocess stderr — it may echo back API keys in some CLIs
+          const msg = sanitizeForDisplay(Buffer.concat(stderrChunks).toString('utf8').trim());
           reject(new Error(`gemini CLI exited with code ${code}: ${msg}`));
         } else {
           resolve();
